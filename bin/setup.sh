@@ -46,25 +46,23 @@ fi
 if ! command -v poetry &>/dev/null; then
   echo "Poetry not found. Attempting to install..."
 
-  # Preferred: pipx (avoids network issues with the official installer)
+  # Preferred: pipx already present
   if command -v pipx &>/dev/null; then
     echo "Installing Poetry via pipx..."
     pipx install poetry
 
-  # Fallback: ensure pipx, then use it
-  elif command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
-    PIP="${pip3:-pip}"
-    if command -v pip3 &>/dev/null; then PIP=pip3; else PIP=pip; fi
+  # Fallback: install pipx first (apt on Linux, pip on macOS), then Poetry
+  else
     echo "Installing pipx, then Poetry..."
-    "$PIP" install --user pipx
+    if [ "$PLATFORM" = "linux" ]; then
+      sudo apt-get update -qq
+      sudo apt-get install -y pipx
+    else
+      pip3 install --user pipx
+    fi
     python3 -m pipx ensurepath
     export PATH="$HOME/.local/bin:$PATH"
     pipx install poetry
-
-  # Last resort: official curl installer
-  else
-    echo "Installing Poetry via official installer (requires internet)..."
-    curl -sSL https://install.python.poetry.org | python3 -
   fi
 
   if ! command -v poetry &>/dev/null; then
