@@ -40,11 +40,32 @@ fi
 
 # ── Ensure Poetry ──────────────────────────────────────────────────────────────
 if ! command -v poetry &>/dev/null; then
-  echo "Poetry not found. Installing via official installer..."
-  curl -sSL https://install.python.poetry.org | python3 -
-
-  # Add Poetry to PATH for the rest of this script
   export PATH="$HOME/.local/bin:$PATH"
+fi
+
+if ! command -v poetry &>/dev/null; then
+  echo "Poetry not found. Attempting to install..."
+
+  # Preferred: pipx (avoids network issues with the official installer)
+  if command -v pipx &>/dev/null; then
+    echo "Installing Poetry via pipx..."
+    pipx install poetry
+
+  # Fallback: ensure pipx, then use it
+  elif command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
+    PIP="${pip3:-pip}"
+    if command -v pip3 &>/dev/null; then PIP=pip3; else PIP=pip; fi
+    echo "Installing pipx, then Poetry..."
+    "$PIP" install --user pipx
+    python3 -m pipx ensurepath
+    export PATH="$HOME/.local/bin:$PATH"
+    pipx install poetry
+
+  # Last resort: official curl installer
+  else
+    echo "Installing Poetry via official installer (requires internet)..."
+    curl -sSL https://install.python.poetry.org | python3 -
+  fi
 
   if ! command -v poetry &>/dev/null; then
     echo ""
