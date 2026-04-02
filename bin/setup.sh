@@ -50,6 +50,8 @@ if ! command -v poetry &>/dev/null; then
   if command -v pipx &>/dev/null; then
     echo "Installing Poetry via pipx..."
     pipx install poetry
+    pipx ensurepath
+    export PATH="$HOME/.local/bin:$PATH"
 
   # Fallback: install pipx first (apt on Linux, pip on macOS), then Poetry
   else
@@ -75,6 +77,13 @@ if ! command -v poetry &>/dev/null; then
 fi
 
 echo "Using Poetry: $(poetry --version)"
+
+# ── Install Linux build dependencies ──────────────────────────────────────────
+# lgpio requires swig and build tools to compile its C extension
+if [ "$PLATFORM" = "linux" ]; then
+  sudo apt-get update -qq
+  sudo apt-get install -y swig build-essential
+fi
 
 # ── Install project dependencies ───────────────────────────────────────────────
 cd "$REPO_ROOT"
