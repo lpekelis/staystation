@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "staystation"
+version = "0.1.0"
+description = "Raspberry Pi operant conditioning system to train a cat to stay"
+authors = ["Leo Pekelis"]
+readme = "README.md"
+packages = [{include = "staystation"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+# GPIO libraries are Linux (Raspberry Pi) only
+gpiozero = {version = "^2.0", markers = "sys_platform == 'linux'"}
+"RPi.GPIO" = {version = "^0.7.1", markers = "sys_platform == 'linux'"}
+lgpio = {version = "^0.2.2", markers = "sys_platform == 'linux'"}
+pyserial = "^3.5"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+ruff = "^0.4"
+
+[tool.poetry.scripts]
+staystation = "staytation.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
