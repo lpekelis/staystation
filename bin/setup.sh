@@ -87,7 +87,7 @@ fi
 
 # ── Install project dependencies ───────────────────────────────────────────────
 cd "$REPO_ROOT"
-poetry install
+poetry install --with vision
 
 # ── Install pre-commit hooks ───────────────────────────────────────────────────
 poetry run pre-commit install

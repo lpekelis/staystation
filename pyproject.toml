@@ -13,6 +13,11 @@ gpiozero = {version = "^2.0", markers = "sys_platform == 'linux'"}
 "RPi.GPIO" = {version = "^0.7.1", markers = "sys_platform == 'linux'"}
 pyserial = "^3.5"
 
+[tool.poetry.group.vision.dependencies]
+torch = "2.3.1"
+torchvision = "0.18.1"
+ultralytics = "8.3.70"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
 ruff = "^0.4"
