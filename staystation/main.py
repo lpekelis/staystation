@@ -25,6 +25,7 @@ def _draw_detections(frame: np.ndarray, detections: list[dict[str, Any]]) -> np.
 def main() -> None:
     parser = argparse.ArgumentParser(description="StayStation")
     parser.add_argument("--viz", action="store_true", help="Show live camera feed with detections")
+    parser.add_argument("--debug", action="store_true", help="Print timing info on every iteration")
     args = parser.parse_args()
 
     if args.viz:
@@ -39,16 +40,39 @@ def main() -> None:
     camera.start()
     time.sleep(1)  # warm-up
 
+    frame_count = 0
     try:
         while True:
+            t_loop = time.perf_counter()
+
+            t0 = time.perf_counter()
             frame = camera.capture_frame()
+            t_capture = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             detections = conditioning.step(frame)
+            t_conditioning = time.perf_counter() - t0
 
             if args.viz:
+                t0 = time.perf_counter()
                 annotated = _draw_detections(frame.copy(), detections)
                 cv2.imshow("StayStation", cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
+                t_viz = time.perf_counter() - t0
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
+            else:
+                t_viz = 0.0
+
+            if args.debug:
+                t_total = time.perf_counter() - t_loop
+                frame_count += 1
+                print(
+                    f"frame={frame_count:4d} | "
+                    f"capture={t_capture * 1000:6.1f}ms | "
+                    f"conditioning={t_conditioning * 1000:6.1f}ms | "
+                    f"viz={t_viz * 1000:6.1f}ms | "
+                    f"total={t_total * 1000:6.1f}ms ({1 / t_total:.1f} fps)"
+                )
     except KeyboardInterrupt:
         pass
     finally:
