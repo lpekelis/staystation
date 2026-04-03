@@ -27,13 +27,35 @@ def main() -> None:
     cam.start()
     time.sleep(1)  # warm-up
 
+    frame_count = 0
+
     try:
         while True:
-            frame = cam.capture_frame()
-            detections = detect(frame, confidence=0.4)
+            t_frame_start = time.perf_counter()
 
+            t0 = time.perf_counter()
+            frame = cam.capture_frame()
+            t_capture = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
+            detections = detect(frame, confidence=0.4)
+            t_inference = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             annotated = draw_detections(frame.copy(), detections)
             cv2.imshow("StayStation - Detection Test", cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
+            t_display = time.perf_counter() - t0
+
+            t_total = time.perf_counter() - t_frame_start
+            frame_count += 1
+
+            print(
+                f"frame={frame_count:4d} | "
+                f"capture={t_capture * 1000:6.1f}ms | "
+                f"inference={t_inference * 1000:6.1f}ms | "
+                f"display={t_display * 1000:6.1f}ms | "
+                f"total={t_total * 1000:6.1f}ms ({1 / t_total:.1f} fps)"
+            )
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
