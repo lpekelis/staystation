@@ -3,6 +3,21 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# ── Parse arguments ────────────────────────────────────────────────────────────
+DEV_MODE=false
+for arg in "$@"; do
+  case "$arg" in
+    --dev) DEV_MODE=true ;;
+    *) echo "Unknown argument: $arg"; echo "Usage: $0 [--dev]"; exit 1 ;;
+  esac
+done
+
+if $DEV_MODE; then
+  echo "Running in dev mode (no Docker, dev dependencies included)"
+else
+  echo "Running in production mode (Docker required, no dev dependencies)"
+fi
+
 # ── Detect platform ────────────────────────────────────────────────────────────
 OS="$(uname -s)"
 case "$OS" in
@@ -87,14 +102,29 @@ if [ "$PLATFORM" = "linux" ]; then
   poetry config virtualenvs.options.system-site-packages true
 fi
 
-# ── Build and start Docker inference server ───────────────────────────────────
-IMAGE_NAME="staystation-inference"
-CONTAINER_NAME="staystation-yolo"
-
-if ! command -v docker &>/dev/null; then
-  echo "Docker not found — skipping inference server setup."
-  echo "Install Docker and re-run to enable YOLO detection."
+# ── Install project dependencies ───────────────────────────────────────────────
+cd "$REPO_ROOT"
+if $DEV_MODE; then
+  poetry install --with dev,tests
 else
+  poetry install --only main
+fi
+
+# ── Dev-only: install pre-commit hooks ────────────────────────────────────────
+if $DEV_MODE; then
+  poetry run pre-commit install
+fi
+
+# ── Production-only: build and start Docker inference server ──────────────────
+if ! $DEV_MODE; then
+  IMAGE_NAME="staystation-inference"
+  CONTAINER_NAME="staystation-yolo"
+
+  if ! command -v docker &>/dev/null; then
+    echo "Docker not found — install Docker and re-run to enable YOLO detection."
+    exit 1
+  fi
+
   echo "Building inference server image (this may take a while on first run)..."
   docker build -t "$IMAGE_NAME" -f "$REPO_ROOT/docker/Dockerfile" "$REPO_ROOT"
 
@@ -120,13 +150,6 @@ else
     sleep 2
   done
 fi
-
-# ── Install project dependencies ───────────────────────────────────────────────
-cd "$REPO_ROOT"
-poetry install --with vision,tests
-
-# ── Install pre-commit hooks ───────────────────────────────────────────────────
-poetry run pre-commit install
 
 echo ""
 echo "Setup complete. Activate the virtualenv with:"

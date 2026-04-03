@@ -18,11 +18,6 @@ Pillow = "^11.0"
 [tool.poetry.group.tests.dependencies]
 opencv-python = "^4.10"
 
-[tool.poetry.group.vision.dependencies]
-torch = "2.3.1"
-torchvision = "0.18.1"
-ultralytics = "8.3.70"
-
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
 ruff = "^0.4"

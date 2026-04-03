@@ -12,7 +12,7 @@ COPY docker/export_model.py /app/export_model.py
 RUN python /app/export_model.py
 
 # Verify export succeeded
-RUN ls -la /app/yolo11n_ncnn_model/
+RUN ls -la /ultralytics/yolo26s_ncnn_model/
 
 # Copy inference server
 COPY docker/inference_server.py /app/inference_server.py
