@@ -7,12 +7,16 @@ RUN pip uninstall torch torchvision -y && \
 # Install server dependencies
 RUN pip install fastapi uvicorn python-multipart
 
+# Model name passed in at build time (e.g. --build-arg YOLO_MODEL_NAME=yolo26s)
+ARG YOLO_MODEL_NAME
+ENV YOLO_MODEL_NAME=${YOLO_MODEL_NAME}
+
 # Export YOLO model to NCNN (cached in image layer)
 COPY docker/export_model.py /app/export_model.py
 RUN python /app/export_model.py
 
 # Verify export succeeded
-RUN ls -la /ultralytics/yolo26s_ncnn_model/
+RUN ls -la /ultralytics/${YOLO_MODEL_NAME}_ncnn_model/
 
 # Copy inference server
 COPY docker/inference_server.py /app/inference_server.py

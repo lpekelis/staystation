@@ -146,8 +146,21 @@ if ! $DEV_MODE; then
     exit 1
   fi
 
+  # Load .env so YOLO_MODEL_NAME is available as a build arg
+  if [ -f "$REPO_ROOT/.env" ]; then
+    set -a
+    # shellcheck source=../.env
+    source "$REPO_ROOT/.env"
+    set +a
+  else
+    echo ".env file not found — expected at $REPO_ROOT/.env"
+    exit 1
+  fi
+
   echo "Building inference server image (this may take a while on first run)..."
-  docker build -t "$IMAGE_NAME" -f "$REPO_ROOT/docker/Dockerfile" "$REPO_ROOT"
+  docker build \
+    --build-arg YOLO_MODEL_NAME="$YOLO_MODEL_NAME" \
+    -t "$IMAGE_NAME" -f "$REPO_ROOT/docker/Dockerfile" "$REPO_ROOT"
 
   docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 

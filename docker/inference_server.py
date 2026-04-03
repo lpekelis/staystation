@@ -1,11 +1,13 @@
 import io
+import os
 
 from fastapi import FastAPI, File, UploadFile
 from PIL import Image
 from ultralytics import YOLO
 
 app = FastAPI()
-model = YOLO("/ultralytics/yolo26s_ncnn_model", task="detect")
+_model_name = os.environ["YOLO_MODEL_NAME"]
+model = YOLO(f"/ultralytics/{_model_name}_ncnn_model", task="detect")
 
 
 @app.post("/detect")
