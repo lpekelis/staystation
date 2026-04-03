@@ -98,7 +98,7 @@ echo "Using Poetry: $(poetry --version)"
 # system-site-packages allows the venv to see picamera2 installed via apt
 if [ "$PLATFORM" = "linux" ]; then
   sudo apt-get update -qq
-  sudo apt-get install -y swig build-essential python3-opencv
+  sudo apt-get install -y swig build-essential python3-opencv python3-picamera2
   poetry config virtualenvs.options.system-site-packages true
 fi
 
