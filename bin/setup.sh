@@ -107,7 +107,7 @@ cd "$REPO_ROOT"
 if $DEV_MODE; then
   poetry install --with dev,tests
 else
-  poetry install --only main
+  poetry install --only main,tests
 fi
 
 # ── Dev-only: install pre-commit hooks ────────────────────────────────────────
