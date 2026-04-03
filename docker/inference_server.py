@@ -5,7 +5,7 @@ from PIL import Image
 from ultralytics import YOLO
 
 app = FastAPI()
-model = YOLO("yolo26s_ncnn_model", task="detect")
+model = YOLO("/ultralytics/yolo26s_ncnn_model", task="detect")
 
 
 @app.post("/detect")
