@@ -5,10 +5,15 @@ from staystation.motor import Motor
 
 def main() -> None:
     motor = Motor()
+    print("Press Enter to dispense a treat. Ctrl+C to exit.")
     try:
-        print("Dispensing one treat...")
-        motor.dispense()
-        print("Done.")
+        while True:
+            input()
+            print("Dispensing...")
+            motor.dispense()
+            print("Done.")
+    except KeyboardInterrupt:
+        pass
     finally:
         motor.cleanup()
 
