@@ -27,6 +27,8 @@ ultralytics = "8.3.70"
 pytest = "^8.0"
 ruff = "^0.4"
 pre-commit = "^4.5.1"
+mypy = "^1.10"
+types-requests = "^2.32"
 
 [tool.poetry.scripts]
 staystation = "staytation.main:main"
@@ -34,6 +36,24 @@ staystation = "staytation.main:main"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "stubs"
+warn_return_any = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+# Vision group and Docker deps — not installed on dev machine
+module = [
+    "torch.*",
+    "torchvision.*",
+    "ultralytics.*",
+    "fastapi.*",
+    "uvicorn.*",
+    "cv2.*",
+]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100

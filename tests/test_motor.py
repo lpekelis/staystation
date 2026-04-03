@@ -43,7 +43,7 @@ motor_pins = [in1, in2, in3, in4]
 motor_step_counter = 0
 
 
-def cleanup():
+def cleanup() -> None:
     GPIO.output(in1, GPIO.LOW)
     GPIO.output(in2, GPIO.LOW)
     GPIO.output(in3, GPIO.LOW)

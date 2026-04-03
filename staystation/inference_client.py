@@ -1,4 +1,5 @@
 import io
+from typing import Any
 
 import numpy as np
 import requests
@@ -7,7 +8,7 @@ from PIL import Image
 INFERENCE_URL = "http://localhost:8080"
 
 
-def detect(frame: np.ndarray, confidence: float = 0.5) -> list[dict]:
+def detect(frame: np.ndarray, confidence: float = 0.5) -> list[dict[str, Any]]:
     """Send a numpy frame (from picamera2) to the inference server."""
     image = Image.fromarray(frame)
     buf = io.BytesIO()
@@ -21,7 +22,8 @@ def detect(frame: np.ndarray, confidence: float = 0.5) -> list[dict]:
         timeout=10,
     )
     response.raise_for_status()
-    return response.json()["detections"]
+    result: list[dict[str, Any]] = response.json()["detections"]
+    return result
 
 
 def health_check() -> bool:

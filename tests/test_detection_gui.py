@@ -1,14 +1,16 @@
 """OpenCV GUI test script — requires a display (local or ssh -X)."""
 
 import time
+from typing import Any
 
 import cv2
+import numpy as np
 
 from staystation.camera import Camera
 from staystation.inference_client import detect, health_check
 
 
-def draw_detections(frame, detections):
+def draw_detections(frame: np.ndarray, detections: list[dict[str, Any]]) -> np.ndarray:
     for d in detections:
         x1, y1, x2, y2 = [int(v) for v in d["bbox"]]
         label = f'{d["class_name"]} {d["confidence"]:.2f}'
@@ -18,7 +20,7 @@ def draw_detections(frame, detections):
     return frame
 
 
-def main():
+def main() -> None:
     assert health_check(), "Inference server not running — start Docker first"
 
     cam = Camera(resolution=(640, 480))

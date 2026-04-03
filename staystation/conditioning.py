@@ -1,3 +1,7 @@
+from typing import Any
+
+import numpy as np
+
 from staystation.inference_client import detect
 from staystation.motor import Motor
 
@@ -7,7 +11,7 @@ class Conditioning:
         self.motor = motor
         self.confidence_threshold = confidence_threshold
 
-    def step(self, frame) -> list[dict]:
+    def step(self, frame: np.ndarray) -> list[dict[str, Any]]:
         """Run one detect → decide → reward cycle. Returns detections."""
         detections = detect(frame, confidence=self.confidence_threshold)
         cat_detections = [d for d in detections if d["class_name"] == "cat"]

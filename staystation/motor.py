@@ -22,7 +22,9 @@ _STEP_SEQUENCE = [
 
 
 class Motor:
-    def __init__(self, in1=17, in2=18, in3=27, in4=22, step_sleep=0.002):
+    def __init__(
+        self, in1: int = 17, in2: int = 18, in3: int = 27, in4: int = 22, step_sleep: float = 0.002
+    ) -> None:
         # careful lowering step_sleep — mechanical limits kick in quickly
         self.pins = [in1, in2, in3, in4]
         self.step_sleep = step_sleep
@@ -33,7 +35,7 @@ class Motor:
             GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, GPIO.LOW)
 
-    def dispense(self, steps=STEPS_PER_TREAT):
+    def dispense(self, steps: int = STEPS_PER_TREAT) -> None:
         """Advance the motor a given number of steps (one full revolution by default)."""
         for _ in range(steps):
             for i, pin in enumerate(self.pins):
@@ -41,7 +43,7 @@ class Motor:
             self._step_counter = (self._step_counter + 1) % 8
             time.sleep(self.step_sleep)
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         for pin in self.pins:
             GPIO.output(pin, GPIO.LOW)
         GPIO.cleanup()
