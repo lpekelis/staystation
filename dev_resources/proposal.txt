@@ -1,0 +1,239 @@
+Core Architecture Decision: HTTP Inference Server
+The cleanest way to bridge your local Python scripts and the Docker-hosted YOLO model is to run a lightweight FastAPI inference server inside the Docker container. Your local script captures a frame, JPEG-encodes it, POSTs it to http://localhost:8080/detect, and gets back JSON with bounding boxes. This keeps the boundary clean — the Docker container owns all the heavy ML dependencies (torch, ultralytics, ncnn), and your local Poetry environment stays lean (picamera2, RPi.GPIO, requests, opencv).
+Here's the full data flow:
+picamera2 (local) → JPEG encode → HTTP POST → [Docker: FastAPI + YOLO/NCNN] → JSON response
+    ↓
+local Python logic (conditioning, motor control)
+    ↓
+RPi.GPIO stepper motor
+Project Structure
+staystation/
+├── docker/
+│   ├── Dockerfile
+│   ├── inference_server.py      # FastAPI app inside container
+│   └── export_model.py          # one-shot NCNN export script
+├── staystation/
+│   ├── __init__.py
+│   ├── camera.py                # picamera2 wrapper
+│   ├── motor.py                 # stepper motor control
+│   ├── inference_client.py      # HTTP client to Docker server
+│   ├── conditioning.py          # operant conditioning logic
+│   └── main.py                  # main loop
+├── scripts/
+│   ├── setup.sh                 # builds Docker image + installs deps
+│   └── test_detection_gui.py    # OpenCV GUI with YOLO overlay
+├── pyproject.toml
+├── systemd/
+│   ├── staystation-inference.service
+│   └── staystation-main.service
+└── web/                         # future: control panel UI
+Phase 1: Docker Inference Server
+Dockerfile — based on the ultralytics ARM64 image, downgrades torch, exports the model to NCNN at build time so it's cached in the image layer, then runs the FastAPI server as the entrypoint:
+dockerfileFROM ultralytics/ultralytics:latest-arm64
+
+# Downgrade torch for Pi4 compatibility
+RUN pip uninstall torch torchvision -y && \
+    pip install torch==2.5.1 torchvision
+
+# Install server dependencies
+RUN pip install fastapi uvicorn python-multipart
+
+# Export YOLO model to NCNN (cached in image layer)
+COPY docker/export_model.py /app/export_model.py
+RUN python /app/export_model.py
+
+# Copy inference server
+COPY docker/inference_server.py /app/inference_server.py
+
+EXPOSE 8080
+CMD ["uvicorn", "inference_server:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "/app"]
+export_model.py — runs once during docker build:
+pythonfrom ultralytics import YOLO
+
+model = YOLO("yolo11n.pt")
+model.export(format="ncnn")
+print("NCNN export complete")
+inference_server.py — the FastAPI app:
+pythonimport io
+import numpy as np
+from fastapi import FastAPI, File, UploadFile
+from PIL import Image
+from ultralytics import YOLO
+
+app = FastAPI()
+model = YOLO("yolo11n_ncnn_model", task="detect")
+
+@app.post("/detect")
+async def detect(file: UploadFile = File(...), confidence: float = 0.5):
+    image_bytes = await file.read()
+    image = Image.open(io.BytesIO(image_bytes))
+    
+    results = model.predict(source=image, conf=confidence, verbose=False)
+    
+    detections = []
+    for r in results:
+        for box in r.boxes:
+            detections.append({
+                "class_id": int(box.cls[0]),
+                "class_name": r.names[int(box.cls[0])],
+                "confidence": float(box.conf[0]),
+                "bbox": box.xyxy[0].tolist(),  # [x1, y1, x2, y2]
+            })
+    
+    return {"detections": detections}
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+The key thing here: the NCNN export and torch downgrade are baked into the Docker image at build time. Subsequent docker build commands hit the cache. The image is ~3-4 GB but that's a one-time cost.
+Phase 2: Local Python Scripts
+inference_client.py — the local side of the HTTP bridge:
+pythonimport io
+import requests
+from PIL import Image
+
+INFERENCE_URL = "http://localhost:8080"
+
+def detect(frame, confidence=0.5):
+    """Send a numpy frame (from picamera2) to the inference server."""
+    image = Image.fromarray(frame)
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=85)
+    buf.seek(0)
+    
+    response = requests.post(
+        f"{INFERENCE_URL}/detect",
+        files={"file": ("frame.jpg", buf, "image/jpeg")},
+        params={"confidence": confidence},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()["detections"]
+
+def health_check():
+    try:
+        r = requests.get(f"{INFERENCE_URL}/health", timeout=3)
+        return r.status_code == 200
+    except requests.ConnectionError:
+        return False
+camera.py — picamera2 wrapper:
+pythonfrom picamera2 import Picamera2
+
+class Camera:
+    def __init__(self, resolution=(640, 480)):
+        self.picam = Picamera2()
+        config = self.picam.create_still_configuration(
+            main={"size": resolution, "format": "RGB888"}
+        )
+        self.picam.configure(config)
+    
+    def start(self):
+        self.picam.start()
+    
+    def capture_frame(self):
+        return self.picam.capture_array()
+    
+    def stop(self):
+        self.picam.stop()
+test_detection_gui.py — your immediate test script:
+pythonimport cv2
+import time
+from staystation.camera import Camera
+from staystation.inference_client import detect, health_check
+
+def draw_detections(frame, detections):
+    for d in detections:
+        x1, y1, x2, y2 = [int(v) for v in d["bbox"]]
+        label = f'{d["class_name"]} {d["confidence"]:.2f}'
+        color = (0, 255, 0) if d["class_name"] == "cat" else (0, 165, 255)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(frame, label, (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+    return frame
+
+def main():
+    assert health_check(), "Inference server not running — start Docker first"
+    
+    cam = Camera(resolution=(640, 480))
+    cam.start()
+    time.sleep(1)  # warm-up
+    
+    try:
+        while True:
+            frame = cam.capture_frame()
+            detections = detect(frame, confidence=0.4)
+            
+            annotated = draw_detections(frame.copy(), detections)
+            cv2.imshow("StayStation - Detection Test", cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
+            
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    finally:
+        cam.stop()
+        cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
+You'll need X11 forwarding (ssh -X) or a local display to use the OpenCV GUI. Alternatively you could save annotated frames to disk and view them.
+Phase 3: setup.sh
+bash#!/bin/bash
+set -e
+
+IMAGE_NAME="staystation-inference"
+CONTAINER_NAME="staystation-yolo"
+
+# Build Docker image (cached if no changes)
+echo "Building inference server image..."
+docker build -t "$IMAGE_NAME" -f docker/Dockerfile .
+
+# Stop existing container if running
+docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+
+# Run inference server in background
+echo "Starting inference server..."
+docker run -d \
+    --name "$CONTAINER_NAME" \
+    --restart unless-stopped \
+    -p 8080:8080 \
+    "$IMAGE_NAME"
+
+# Wait for server to be ready
+echo "Waiting for inference server..."
+for i in $(seq 1 30); do
+    if curl -s http://localhost:8080/health > /dev/null 2>&1; then
+        echo "Inference server ready!"
+        break
+    fi
+    sleep 2
+done
+
+# Install local Python deps
+echo "Installing Python dependencies..."
+poetry install
+Phase 4 (later): Auto-boot with systemd
+Two service files — one for the Docker container (though --restart unless-stopped mostly handles this), one for your main Python script:
+ini# systemd/staystation-main.service
+[Unit]
+Description=StayStation Main Loop
+After=docker.service staystation-inference.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/staystation
+ExecStartPre=/bin/bash -c 'until curl -s http://localhost:8080/health; do sleep 2; done'
+ExecStart=/home/pi/.local/bin/poetry run python -m staystation.main
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+Phase 5 (eventually): Web Control Panel
+Run a second FastAPI server locally (in your Poetry environment) that serves a simple web UI and exposes controls via REST endpoints. This server shares state with your main loop — easiest pattern is to run them in the same process using background tasks or threading. The web UI would be a lightweight React or vanilla JS app at http://<pi-ip>:3000 that lets you adjust confidence thresholds, view the camera feed (MJPEG stream), toggle the conditioning system, check treat count, etc.
+Important Considerations
+picamera2 and Poetry: picamera2 is a system package and can't be pip-installed. In your pyproject.toml, you'll either need to set virtualenvs.options.system-site-packages = true via poetry config, or use --system-site-packages when creating the venv. Otherwise your Poetry env won't see picamera2.
+Performance: JPEG encoding + HTTP overhead adds maybe 50-100ms per frame on top of inference time. For cat detection at 1-2 FPS this is perfectly fine. If you ever need lower latency, you could switch to a Unix socket or shared memory, but HTTP is the right starting point.
+GPIO permissions: Your main script needs GPIO access. Either run as root, add your user to the gpio group, or use gpiod instead of RPi.GPIO (which is the more modern approach and doesn't require root).
+Model path in Docker: The NCNN export creates a directory like yolo11n_ncnn_model/. Make sure the path in inference_server.py matches what export_model.py produces. You can verify by adding an RUN ls -la yolo11n_ncnn_model/ line in the Dockerfile after the export step.
+Want me to scaffold any of these files into your repo, or dive deeper into any specific piece?

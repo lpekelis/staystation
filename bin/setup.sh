@@ -80,14 +80,50 @@ echo "Using Poetry: $(poetry --version)"
 
 # ── Install Linux build dependencies ──────────────────────────────────────────
 # lgpio requires swig and build tools to compile its C extension
+# system-site-packages allows the venv to see picamera2 installed via apt
 if [ "$PLATFORM" = "linux" ]; then
   sudo apt-get update -qq
   sudo apt-get install -y swig build-essential
+  poetry config virtualenvs.options.system-site-packages true
+fi
+
+# ── Build and start Docker inference server ───────────────────────────────────
+IMAGE_NAME="staystation-inference"
+CONTAINER_NAME="staystation-yolo"
+
+if ! command -v docker &>/dev/null; then
+  echo "Docker not found — skipping inference server setup."
+  echo "Install Docker and re-run to enable YOLO detection."
+else
+  echo "Building inference server image (this may take a while on first run)..."
+  docker build -t "$IMAGE_NAME" -f "$REPO_ROOT/docker/Dockerfile" "$REPO_ROOT"
+
+  docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+
+  echo "Starting inference server..."
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    --restart unless-stopped \
+    -p 8080:8080 \
+    "$IMAGE_NAME"
+
+  echo "Waiting for inference server to be ready..."
+  for i in $(seq 1 30); do
+    if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+      echo "Inference server ready!"
+      break
+    fi
+    if [ "$i" -eq 30 ]; then
+      echo "Inference server did not become ready in time — check: docker logs $CONTAINER_NAME"
+      exit 1
+    fi
+    sleep 2
+  done
 fi
 
 # ── Install project dependencies ───────────────────────────────────────────────
 cd "$REPO_ROOT"
-poetry install --with vision
+poetry install --with vision,tests
 
 # ── Install pre-commit hooks ───────────────────────────────────────────────────
 poetry run pre-commit install

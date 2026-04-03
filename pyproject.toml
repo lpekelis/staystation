@@ -12,6 +12,11 @@ python = "^3.11"
 gpiozero = {version = "^2.0", markers = "sys_platform == 'linux'"}
 "RPi.GPIO" = {version = "^0.7.1", markers = "sys_platform == 'linux'"}
 pyserial = "^3.5"
+requests = "^2.32"
+Pillow = "^11.0"
+
+[tool.poetry.group.tests.dependencies]
+opencv-python = "^4.10"
 
 [tool.poetry.group.vision.dependencies]
 torch = "2.3.1"
