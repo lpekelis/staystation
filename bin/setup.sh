@@ -5,10 +5,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ── Parse arguments ────────────────────────────────────────────────────────────
 DEV_MODE=false
+DIRTY=false
 for arg in "$@"; do
   case "$arg" in
-    --dev) DEV_MODE=true ;;
-    *) echo "Unknown argument: $arg"; echo "Usage: $0 [--dev]"; exit 1 ;;
+    --dev)   DEV_MODE=true ;;
+    --dirty) DIRTY=true ;;
+    *) echo "Unknown argument: $arg"; echo "Usage: $0 [--dev] [--dirty]"; exit 1 ;;
   esac
 done
 
@@ -93,13 +95,32 @@ fi
 
 echo "Using Poetry: $(poetry --version)"
 
+# ── Remove existing venv ───────────────────────────────────────────────────────
+# Ensures system-site-packages config is respected from a clean state.
+# Skip with --dirty to reuse the existing venv for faster re-runs.
+if $DIRTY; then
+  echo "Skipping venv removal (--dirty)"
+else
+  rm -rf "$REPO_ROOT/.venv"
+fi
+
 # ── Install Linux build dependencies ──────────────────────────────────────────
 # lgpio requires swig and build tools to compile its C extension
-# system-site-packages allows the venv to see picamera2 installed via apt
 if [ "$PLATFORM" = "linux" ]; then
   sudo apt-get update -qq
   sudo apt-get install -y swig build-essential python3-opencv python3-picamera2
-  poetry config virtualenvs.options.system-site-packages true
+fi
+
+# ── Create venv ────────────────────────────────────────────────────────────────
+# On Linux, create the venv explicitly with --system-site-packages so picamera2
+# and other apt-installed packages are visible. Poetry will reuse an existing
+# .venv rather than creating a new one without the flag.
+if ! $DIRTY; then
+  if [ "$PLATFORM" = "linux" ]; then
+    python3 -m venv --system-site-packages "$REPO_ROOT/.venv"
+  else
+    python3 -m venv "$REPO_ROOT/.venv"
+  fi
 fi
 
 # ── Install project dependencies ───────────────────────────────────────────────
