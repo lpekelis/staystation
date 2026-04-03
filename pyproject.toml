@@ -16,7 +16,9 @@ requests = "^2.32"
 Pillow = "^11.0"
 
 [tool.poetry.group.tests.dependencies]
-opencv-python = "^4.10"
+# On Linux/Pi, opencv is installed via apt (python3-opencv) and accessed through
+# system-site-packages. PyPI wheels are macOS-only.
+opencv-python = {version = "^4.10", markers = "sys_platform == 'darwin'"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
