@@ -1,5 +1,6 @@
 import argparse
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -32,6 +33,8 @@ def main() -> None:
         import cv2
 
     assert health_check(), "Inference server not reachable — start Docker first"
+
+    Path("data").mkdir(exist_ok=True)
 
     motor = Motor()
     camera = Camera()
@@ -73,6 +76,11 @@ def main() -> None:
                     f"viz={t_viz * 1000:6.1f}ms | "
                     f"total={t_total * 1000:6.1f}ms ({1 / t_total:.1f} fps)"
                 )
+
+            # Enforce 1-second step timing for consistent data recording
+            elapsed = time.perf_counter() - t_loop
+            if elapsed < 1.0:
+                time.sleep(1.0 - elapsed)
     except KeyboardInterrupt:
         pass
     finally:
