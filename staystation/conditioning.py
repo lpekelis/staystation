@@ -61,9 +61,9 @@ class Conditioning:
             print(
                 f"[step {self.step_count}] Treating (cat={cat_detected} conf={cat_confidence:.2f})"
             )
-            self.motor.dispense()
             if self.buzzer is not None:
                 mario_coin(self.buzzer)
+            self.motor.dispense()
 
         # Record observation
         row = pd.DataFrame(
