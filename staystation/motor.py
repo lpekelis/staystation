@@ -20,10 +20,20 @@ _STEP_SEQUENCE = [
     [0, 0, 0, 1],
 ]
 
+IN1 = 17
+IN2 = 18
+IN3 = 27
+IN4 = 22
+
 
 class Motor:
     def __init__(
-        self, in1: int = 17, in2: int = 18, in3: int = 27, in4: int = 22, step_sleep: float = 0.002
+        self,
+        in1: int = IN1,
+        in2: int = IN2,
+        in3: int = IN3,
+        in4: int = IN4,
+        step_sleep: float = 0.002,
     ) -> None:
         # careful lowering step_sleep — mechanical limits kick in quickly
         self.pins = [in1, in2, in3, in4]
