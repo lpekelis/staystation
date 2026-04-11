@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import math
 import random
 from abc import ABC, abstractmethod
 from typing import Self
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 # Default priors: Beta(a, b) for each (cat_detected, treat_dispensed) state
 DEFAULT_PRIORS: dict[tuple[int, int], tuple[float, float]] = {
@@ -173,7 +176,9 @@ class ConditioningModel1(ConditioningModel):
     ) -> bool:
         """Return True if treating has sufficient expected benefit over not treating."""
         if random.random() < self.p_explore:
-            return random.random() < 0.5
+            result = random.random() < 0.5
+            logger.debug("exploring randomly → treat=%s", result)
+            return result
 
         c = int(cat_detected)
 
@@ -183,7 +188,17 @@ class ConditioningModel1(ConditioningModel):
         self.fit(df, (c, 0), current_step)
         e_no_treat = self.predict()
 
-        return (e_treat - e_no_treat) > self.gamma
+        result = (e_treat - e_no_treat) > self.gamma
+        logger.debug(
+            "cat=%s e_treat=%.3f e_no_treat=%.3f diff=%.3f gamma=%.3f → treat=%s",
+            cat_detected,
+            e_treat,
+            e_no_treat,
+            e_treat - e_no_treat,
+            self.gamma,
+            result,
+        )
+        return result
 
 
 class ConditioningModel2(ConditioningModel):
@@ -282,7 +297,9 @@ class ConditioningModel2(ConditioningModel):
     ) -> bool:
         """Return True if treating has sufficient expected benefit over not treating."""
         if random.random() < self.p_explore:
-            return random.random() < 0.5
+            result = random.random() < 0.5
+            logger.debug("model2 exploring randomly → treat=%s", result)
+            return result
 
         c = int(cat_detected)
 
@@ -292,7 +309,16 @@ class ConditioningModel2(ConditioningModel):
         self.fit(df, (c, 0), current_step)
         e_no_treat = self.predict()
 
-        return (e_treat - e_no_treat) > self.gamma
+        result = (e_treat - e_no_treat) > self.gamma
+        logger.debug(
+            "model2 e_treat=%.3f e_no_treat=%.3f diff=%.3f gamma=%.3f → treat=%s",
+            e_treat,
+            e_no_treat,
+            e_treat - e_no_treat,
+            self.gamma,
+            result,
+        )
+        return result
 
 
 class ConditioningModel3(ConditioningModel):
@@ -301,8 +327,8 @@ class ConditioningModel3(ConditioningModel):
     At level 0, dispenses a treat on every available step to attract the cat.
     At level L (≥1), dispenses every L refractory periods (L * horizon steps).
 
-    Graduates to the next level when the last k eligible treat cycles at the
-    current level have success rate (cat detected within horizon steps) > p_graduate.
+    Promotes to the next level when the last k eligible treat cycles have
+    success rate > p_promote. Demotes when success rate < p_demote (0 = never demote).
     """
 
     def __init__(
@@ -310,16 +336,18 @@ class ConditioningModel3(ConditioningModel):
         sigma: float = 30.0,
         gamma: float = 0.05,
         horizon: int = 3,
-        p_explore: float = 0.05,
+        p_explore: float = 0.005,
         k: int = 3,
-        p_graduate: float = 0.67,
+        p_promote: float = 0.67,
+        p_demote: float = 0.01,
     ) -> None:
         self.sigma = sigma
         self.gamma = gamma
         self.horizon = horizon
         self.p_explore = p_explore
         self.k = k
-        self.p_graduate = p_graduate
+        self.p_promote = p_promote
+        self.p_demote = p_demote
 
         self.level: int = 0
         self._level_start_treat_idx: int = 0
@@ -336,16 +364,38 @@ class ConditioningModel3(ConditioningModel):
         return bool(future["cat_detected"].any())
 
     def _check_graduation(self, df: pd.DataFrame, current_step: int) -> None:
-        """Advance level if last k eligible treat cycles at this level succeeded."""
+        """Promote or demote level based on last k eligible treat cycles."""
         treats = self._treat_steps(df)
         level_treats = treats[self._level_start_treat_idx :]
         eligible = [s for s in level_treats if s + self.horizon < current_step]
         if len(eligible) < self.k:
+            logger.debug(
+                "model3 level=%d eligible=%d/%d (need %d)",
+                self.level,
+                len(eligible),
+                len(level_treats),
+                self.k,
+            )
             return
         successes = sum(1 for s in eligible[-self.k :] if self._success(df, s))
-        if successes / self.k > self.p_graduate:
+        rate = successes / self.k
+        logger.debug(
+            "model3 level=%d successes=%d/%d rate=%.2f p_promote=%.2f p_demote=%.2f",
+            self.level,
+            successes,
+            self.k,
+            rate,
+            self.p_promote,
+            self.p_demote,
+        )
+        if rate > self.p_promote:
             self.level += 1
             self._level_start_treat_idx = len(treats)
+            logger.debug("model3 promoted → level=%d", self.level)
+        elif self.p_demote > 0 and rate < self.p_demote and self.level > 0:
+            self.level -= 1
+            self._level_start_treat_idx = len(treats)
+            logger.debug("model3 demoted → level=%d", self.level)
 
     def fit(
         self,
@@ -383,13 +433,26 @@ class ConditioningModel3(ConditioningModel):
         Level L: dispense only if L * horizon steps have passed since last treat.
         """
         if random.random() < self.p_explore:
-            return random.random() < 0.5
+            result = random.random() < 0.5
+            logger.debug("model3 exploring randomly → treat=%s", result)
+            return result
 
         self._check_graduation(df, current_step)
 
         if self.level == 0:
+            logger.debug("model3 level=0 → treat=True")
             return True
 
         treats = self._treat_steps(df)
         last_treat = treats[-1] if treats else current_step - self.level * self.horizon
-        return (current_step - last_treat) >= self.level * self.horizon
+        steps_since = current_step - last_treat
+        needed = self.level * self.horizon
+        result = steps_since >= needed
+        logger.debug(
+            "model3 level=%d steps_since=%d needed=%d → treat=%s",
+            self.level,
+            steps_since,
+            needed,
+            result,
+        )
+        return result

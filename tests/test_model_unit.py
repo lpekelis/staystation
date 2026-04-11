@@ -278,13 +278,13 @@ class TestConditioningModel3CheckGraduation:
         return make_df(rows)
 
     def test_graduates_after_k_successes(self) -> None:
-        m = ConditioningModel3(horizon=2, k=3, p_graduate=0.67, p_explore=0.0)
+        m = ConditioningModel3(horizon=2, k=3, p_promote=0.67, p_explore=0.0)
         df = self._df_with_k_successes(3, 2)
         m._check_graduation(df, current_step=50)
         assert m.level == 1
 
     def test_does_not_graduate_on_failures(self) -> None:
-        m = ConditioningModel3(horizon=2, k=3, p_graduate=0.67, p_explore=0.0)
+        m = ConditioningModel3(horizon=2, k=3, p_promote=0.67, p_explore=0.0)
         rows = []
         for base in range(0, 9, 3):
             rows.append((base, True, True))
@@ -293,20 +293,20 @@ class TestConditioningModel3CheckGraduation:
         assert m.level == 0
 
     def test_resets_level_start_treat_idx_after_graduation(self) -> None:
-        m = ConditioningModel3(horizon=2, k=3, p_graduate=0.67, p_explore=0.0)
+        m = ConditioningModel3(horizon=2, k=3, p_promote=0.67, p_explore=0.0)
         df = self._df_with_k_successes(3, 2)
         m._check_graduation(df, current_step=50)
         assert m._level_start_treat_idx == 3
 
     def test_does_not_graduate_without_enough_future_data(self) -> None:
-        m = ConditioningModel3(horizon=3, k=3, p_graduate=0.67, p_explore=0.0)
+        m = ConditioningModel3(horizon=3, k=3, p_promote=0.67, p_explore=0.0)
         # treat at step 0, but current_step=1 so 0 + 3 = 3 is not < 1
         df = make_df([(0, True, True), (1, True, False)])
         m._check_graduation(df, current_step=1)
         assert m.level == 0
 
     def test_second_graduation_requires_new_treats(self) -> None:
-        m = ConditioningModel3(horizon=2, k=3, p_graduate=0.67, p_explore=0.0)
+        m = ConditioningModel3(horizon=2, k=3, p_promote=0.67, p_explore=0.0)
         df = self._df_with_k_successes(3, 2)
         m._check_graduation(df, current_step=50)
         assert m.level == 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from staystation.buzzer import Buzzer, mario_coin
 from staystation.inference_client import detect
 from staystation.model import ConditioningModel, ConditioningModel1
 from staystation.motor import Motor
+
+logger = logging.getLogger(__name__)
 
 
 class Conditioning:
@@ -47,6 +50,14 @@ class Conditioning:
         cat_detected = len(cat_detections) > 0
         cat_confidence = max((d["confidence"] for d in cat_detections), default=0.0)
 
+        logger.debug(
+            "step=%d cat=%s conf=%.2f detections=%d",
+            self.step_count,
+            cat_detected,
+            cat_confidence,
+            len(detections),
+        )
+
         # Refractory period: don't treat within `horizon` steps of last treat
         in_refractory = (self.step_count - self.last_treat_step) <= self.model.horizon
 
@@ -55,6 +66,12 @@ class Conditioning:
         if not in_refractory:
             treat = self.model.should_treat(cat_detected, self.dataset, self.step_count)
             decision = True
+        else:
+            logger.debug(
+                "step=%d refractory (last_treat=%d)", self.step_count, self.last_treat_step
+            )
+
+        logger.debug("step=%d treat=%s decision=%s", self.step_count, treat, decision)
 
         if treat:
             self.last_treat_step = self.step_count

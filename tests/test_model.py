@@ -186,7 +186,7 @@ def main() -> None:
 
     n_steps = 200
     rng = np.random.default_rng(42)
-    horizon = 5
+    horizon = 10
     gamma = 0.1
 
     # p_table keys: (cat_detected, treat_dispensed)
