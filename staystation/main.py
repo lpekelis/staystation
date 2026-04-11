@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from staystation.buzzer import Buzzer
 from staystation.camera import Camera
 from staystation.conditioning import Conditioning
 from staystation.inference_client import health_check
@@ -37,8 +38,9 @@ def main() -> None:
     Path("data").mkdir(exist_ok=True)
 
     motor = Motor()
+    buzzer = Buzzer()
     camera = Camera()
-    conditioning = Conditioning(motor)
+    conditioning = Conditioning(motor, buzzer)
 
     camera.start()
     time.sleep(1)  # warm-up
@@ -86,6 +88,7 @@ def main() -> None:
     finally:
         camera.stop()
         motor.cleanup()
+        buzzer.cleanup()
         if args.viz:
             cv2.destroyAllWindows()
 

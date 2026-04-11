@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from staystation.buzzer import Buzzer, mario_coin
 from staystation.inference_client import detect
 from staystation.model import ConditioningModel, ConditioningModel1
 from staystation.motor import Motor
@@ -16,12 +17,14 @@ class Conditioning:
     def __init__(
         self,
         motor: Motor,
+        buzzer: Buzzer | None = None,
         model: ConditioningModel | None = None,
         confidence_threshold: float = 0.5,
         save_path: str | Path = "data/dataset.csv",
         save_interval: int = 10,
     ) -> None:
         self.motor = motor
+        self.buzzer = buzzer
         self.model = model or ConditioningModel1()
         self.confidence_threshold = confidence_threshold
         self.save_path = Path(save_path)
@@ -59,6 +62,8 @@ class Conditioning:
                 f"[step {self.step_count}] Treating (cat={cat_detected} conf={cat_confidence:.2f})"
             )
             self.motor.dispense()
+            if self.buzzer is not None:
+                mario_coin(self.buzzer)
 
         # Record observation
         row = pd.DataFrame(
