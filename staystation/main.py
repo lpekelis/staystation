@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from staystation.buzzer import Buzzer
-from staystation.camera import make_camera
+from staystation.camera import make_camera, parse_camera_device
 from staystation.conditioning import Conditioning
 from staystation.inference_client import health_check
 from staystation.motor import Motor
@@ -115,13 +115,7 @@ def main() -> None:
 
     motor = Motor()
     buzzer = Buzzer()
-    device = args.camera_device
-    if device != "auto":
-        try:
-            device = int(device)
-        except ValueError:
-            pass  # keep as path string
-    camera = make_camera(backend=args.camera, device=device)
+    camera = make_camera(backend=args.camera, device=parse_camera_device(args.camera_device))
     shared = dict(
         sigma=args.sigma, gamma=args.gamma, horizon=args.horizon, p_explore=args.p_explore
     )

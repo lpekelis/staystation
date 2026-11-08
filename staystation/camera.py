@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import glob
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -13,13 +12,60 @@ if TYPE_CHECKING:
     from picamera2 import Picamera2
 
 
-def _find_usb_camera(name_substr: str) -> str:
-    for name_file in sorted(glob.glob("/sys/class/video4linux/*/name")):
-        card_name = Path(name_file).read_text().strip()
-        if name_substr.lower() in card_name.lower():
-            device = Path(name_file).parent.name
-            return f"/dev/{device}"
-    raise RuntimeError(f"No camera matching {name_substr!r} found in /sys/class/video4linux")
+def _read_sysfs(path: Path) -> str:
+    try:
+        return path.read_text().strip()
+    except OSError:
+        return ""
+
+
+def _find_usb_camera(name_hint: str) -> str:
+    """Find a USB (UVC) webcam's capture node, e.g. /dev/video0.
+
+    On a Pi, /sys/class/video4linux also lists codec/ISP nodes, and webcams
+    often report a generic name (e.g. "USB Camera") rather than the brand.
+    So we only consider uvcvideo devices, skip their metadata nodes
+    (index != 0), prefer one whose name contains `name_hint`, and otherwise
+    fall back to the first USB camera found.
+    """
+    seen: list[str] = []
+    usb_nodes: list[tuple[str, str]] = []  # (dev path, card name)
+    nodes = sorted(
+        Path("/sys/class/video4linux").glob("video*"),
+        key=lambda p: int(p.name[5:]) if p.name[5:].isdigit() else 0,
+    )
+    for node in nodes:
+        card_name = _read_sysfs(node / "name")
+        driver = (node / "device" / "driver").resolve().name
+        seen.append(f"/dev/{node.name}: {card_name!r} (driver={driver})")
+        if driver != "uvcvideo":
+            continue
+        if _read_sysfs(node / "index") not in ("", "0"):
+            continue  # metadata node, not a capture node
+        usb_nodes.append((f"/dev/{node.name}", card_name))
+
+    for dev, card_name in usb_nodes:
+        if name_hint.lower() in card_name.lower():
+            return dev
+    if usb_nodes:
+        return usb_nodes[0][0]
+
+    listing = "\n  ".join(seen) or "(none)"
+    raise RuntimeError(
+        "No USB camera found. Video devices:\n  "
+        f"{listing}\n"
+        "Pass an explicit device, e.g. --camera-device /dev/video0"
+    )
+
+
+def parse_camera_device(value: str) -> int | str:
+    """Parse a CLI device arg: 'auto', an integer index, or a /dev path."""
+    if value == "auto":
+        return value
+    try:
+        return int(value)
+    except ValueError:
+        return value
 
 
 class BaseCamera(ABC):

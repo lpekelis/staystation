@@ -1,12 +1,13 @@
 """OpenCV GUI test script — requires a display (local or ssh -X)."""
 
+import argparse
 import time
 from typing import Any
 
 import cv2
 import numpy as np
 
-from staystation.camera import make_camera
+from staystation.camera import make_camera, parse_camera_device
 from staystation.inference_client import detect, health_check
 
 
@@ -21,9 +22,27 @@ def draw_detections(frame: np.ndarray, detections: list[dict[str, Any]]) -> np.n
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Live detection test with OpenCV window")
+    parser.add_argument(
+        "--camera",
+        choices=["picamera2", "usb"],
+        default="picamera2",
+        help="Camera backend (default: picamera2)",
+    )
+    parser.add_argument(
+        "--camera-device",
+        default="auto",
+        help="USB device index, path (e.g. /dev/video0), or 'auto' (default: auto)",
+    )
+    args = parser.parse_args()
+
     assert health_check(), "Inference server not running — start Docker first"
 
-    cam = make_camera(resolution=(640, 480))
+    cam = make_camera(
+        backend=args.camera,
+        device=parse_camera_device(args.camera_device),
+        resolution=(640, 480),
+    )
     cam.start()
     time.sleep(1)  # warm-up
 
