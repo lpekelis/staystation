@@ -6,7 +6,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from staystation.camera import Camera
+from staystation.camera import make_camera
 from staystation.inference_client import detect, health_check
 
 
@@ -23,7 +23,7 @@ def draw_detections(frame: np.ndarray, detections: list[dict[str, Any]]) -> np.n
 def main() -> None:
     assert health_check(), "Inference server not running — start Docker first"
 
-    cam = Camera(resolution=(640, 480))
+    cam = make_camera(resolution=(640, 480))
     cam.start()
     time.sleep(1)  # warm-up
 

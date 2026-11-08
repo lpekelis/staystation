@@ -1,5 +1,6 @@
 import io
 import os
+from typing import Any
 
 from fastapi import FastAPI, File, UploadFile
 from PIL import Image
@@ -11,13 +12,13 @@ model = YOLO(f"/ultralytics/{_model_name}_ncnn_model", task="detect")
 
 
 @app.post("/detect")
-async def detect(file: UploadFile = File(...), confidence: float = 0.5):
+async def detect(file: UploadFile = File(...), confidence: float = 0.5) -> dict[str, Any]:
     image_bytes = await file.read()
     image = Image.open(io.BytesIO(image_bytes))
 
     results = model.predict(source=image, conf=confidence, verbose=False)
 
-    detections = []
+    detections: list[dict[str, Any]] = []
     for r in results:
         for box in r.boxes:
             detections.append(
@@ -33,5 +34,5 @@ async def detect(file: UploadFile = File(...), confidence: float = 0.5):
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}

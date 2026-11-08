@@ -31,7 +31,7 @@ types-requests = "^2.32"
 pandas-stubs = "^2.2"
 
 [tool.poetry.scripts]
-staystation = "staytation.main:main"
+staystation = "staystation.main:main"
 
 [build-system]
 requires = ["poetry-core"]

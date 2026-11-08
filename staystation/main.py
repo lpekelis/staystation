@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from staystation.buzzer import Buzzer
-from staystation.camera import Camera
+from staystation.camera import make_camera
 from staystation.conditioning import Conditioning
 from staystation.inference_client import health_check
 from staystation.motor import Motor
@@ -81,6 +81,17 @@ def main() -> None:
         help="[model 3] Success rate below which to demote a level (default: 0.01)",
     )
     parser.add_argument(
+        "--camera",
+        choices=["picamera2", "usb"],
+        default="picamera2",
+        help="Camera backend (default: picamera2)",
+    )
+    parser.add_argument(
+        "--camera-device",
+        default="auto",
+        help="USB device index, path (e.g. /dev/video2), or 'auto' to detect by name (default: auto)",
+    )
+    parser.add_argument(
         "--confidence",
         type=float,
         default=0.5,
@@ -104,7 +115,13 @@ def main() -> None:
 
     motor = Motor()
     buzzer = Buzzer()
-    camera = Camera()
+    device = args.camera_device
+    if device != "auto":
+        try:
+            device = int(device)
+        except ValueError:
+            pass  # keep as path string
+    camera = make_camera(backend=args.camera, device=device)
     shared = dict(
         sigma=args.sigma, gamma=args.gamma, horizon=args.horizon, p_explore=args.p_explore
     )
