@@ -1,11 +1,14 @@
 import argparse
 import logging
+import secrets
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from staystation.bandit_model import CatStore, ConditioningModel4
 from staystation.buzzer import Buzzer
 from staystation.camera import make_camera, parse_camera_device
 from staystation.conditioning import Conditioning
@@ -36,7 +39,7 @@ def main() -> None:
     parser.add_argument("--viz", action="store_true", help="Show live camera feed with detections")
     parser.add_argument("--debug", action="store_true", help="Print timing info on every iteration")
     parser.add_argument(
-        "--model", type=int, choices=[1, 2, 3], default=1, help="Conditioning model (default: 1)"
+        "--model", type=int, choices=[1, 2, 3, 4], default=1, help="Conditioning model (default: 1)"
     )
     parser.add_argument(
         "--sigma",
@@ -53,8 +56,8 @@ def main() -> None:
     parser.add_argument(
         "--horizon",
         type=int,
-        default=10,
-        help="Success window and refractory period in steps (default: 10)",
+        default=None,
+        help="Success window and refractory period in steps (default: 10, model 4: 5)",
     )
     parser.add_argument(
         "--p-explore",
@@ -81,6 +84,42 @@ def main() -> None:
         help="[model 3] Success rate below which to demote a level (default: 0.01)",
     )
     parser.add_argument(
+        "--cat-id",
+        default=None,
+        help="[model 4] Cat id: loads/saves fitted params and diagnostics under "
+        "data/cats/<id>/. If omitted, a new timestamped id is generated for this run.",
+    )
+    parser.add_argument(
+        "--lookback",
+        type=int,
+        default=600,
+        help="[model 4] Steps (~seconds) of history used in each fit (default: 600)",
+    )
+    parser.add_argument(
+        "--half-life",
+        type=float,
+        default=300.0,
+        help="[model 4] Age half-life in steps for down-weighting observations (default: 300)",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.66,
+        help="[model 4] Treat when P(cat on mat in 5s | no treat) is below this (default: 0.66)",
+    )
+    parser.add_argument(
+        "--explore-interval",
+        type=float,
+        default=180.0,
+        help="[model 4] Exploration rate: ~1 extra treat per this many steps (default: 180)",
+    )
+    parser.add_argument(
+        "--max-lure-treats",
+        type=int,
+        default=5,
+        help="[model 4] Max treats released while the cat is off the mat (default: 5)",
+    )
+    parser.add_argument(
         "--camera",
         choices=["picamera2", "usb"],
         default="picamera2",
@@ -101,6 +140,8 @@ def main() -> None:
         "--save-interval", type=int, default=10, help="Save dataset every N steps (default: 10)"
     )
     args = parser.parse_args()
+    if args.cat_id and args.model != 4:
+        print(f"Warning: --cat-id is only used by --model 4 (got --model {args.model})")
 
     if args.debug:
         logging.basicConfig(format="%(name)s | %(message)s")
@@ -116,15 +157,31 @@ def main() -> None:
     motor = Motor()
     buzzer = Buzzer()
     camera = make_camera(backend=args.camera, device=parse_camera_device(args.camera_device))
-    shared = dict(
-        sigma=args.sigma, gamma=args.gamma, horizon=args.horizon, p_explore=args.p_explore
-    )
+    horizon = args.horizon if args.horizon is not None else (5 if args.model == 4 else 10)
+    shared = dict(sigma=args.sigma, gamma=args.gamma, horizon=horizon, p_explore=args.p_explore)
     model: ConditioningModel
-    if args.model == 1:
+    if args.model == 4:
+        cat_id = args.cat_id or (f"cat-{datetime.now():%Y%m%d-%H%M%S}-{secrets.token_hex(2)}")
+        store = CatStore(cat_id)
+        resumed = store.params_path.exists()
+        print(
+            f"Cat id: {cat_id} ({'resuming saved params' if resumed else 'new params'}) "
+            f"→ {store.dir}"
+        )
+        model = ConditioningModel4(
+            horizon=horizon,
+            lookback=args.lookback,
+            half_life=args.half_life,
+            threshold=args.threshold,
+            explore_interval=args.explore_interval,
+            max_lure_treats=args.max_lure_treats,
+            store=store,
+        )
+    elif args.model == 1:
         model = ConditioningModel1(**shared)
     elif args.model == 2:
         model = ConditioningModel2(**shared)
-    else:
+    elif args.model == 3:
         model = ConditioningModel3(
             **shared, k=args.k, p_promote=args.p_promote, p_demote=args.p_demote
         )

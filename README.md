@@ -114,12 +114,17 @@ Common options (see `python -m staystation.main --help` for all of them):
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--model {1,2,3}` | `1` | Which conditioning model to use |
+| `--model {1,2,3,4}` | `1` | Which conditioning model to use |
 | `--camera {picamera2,usb}` | `picamera2` | Camera backend |
 | `--camera-device` | `auto` | USB device index or path (e.g. `/dev/video2`) |
 | `--confidence` | `0.5` | Detection confidence threshold |
-| `--sigma` / `--gamma` / `--horizon` / `--p-explore` | | Shared conditioning-model parameters |
+| `--sigma` / `--gamma` / `--horizon` / `--p-explore` | | Shared conditioning-model parameters (`--horizon` defaults to 10, or 5 for model 4) |
 | `--k` / `--p-promote` / `--p-demote` | | Model 3 level-change parameters |
+| `--cat-id` | new id | Model 4: which cat's saved params to resume (see below) |
+| `--lookback` / `--half-life` | `600` / `300` | Model 4: steps of history per fit, and age half-life for weighting them |
+| `--threshold` | `0.66` | Model 4: treat when P(cat on mat in 5 s \| no treat) is below this |
+| `--explore-interval` | `180` | Model 4: ~1 exploration treat every N steps (seconds) |
+| `--max-lure-treats` | `5` | Model 4: max treats released while the cat is off the mat |
 | `--save-interval` | `10` | Save the dataset every N steps |
 | `--viz` | off | Show the live camera feed with detections (needs a display; press `q` to quit) |
 | `--debug` | off | Print per-frame timing |
@@ -129,6 +134,35 @@ Example:
 ```bash
 python -m staystation.main --model 3 --camera usb --debug
 ```
+
+#### Model 4 (bandit) and cat ids
+
+Model 4 refits a small logistic regression every second on the last 10 minutes
+of data (newer observations weigh more). It predicts whether the cat will be on
+the mat one second from now from: on/off mat, time on the mat, time away, and
+whether a treat was just dispensed. Rolling that forward 5 seconds gives
+P(cat on mat in 5 s). It treats when that probability (without a treat) is
+below `--threshold`, plus an occasional exploration treat (`--explore-interval`).
+While the cat is away, at most `--max-lure-treats` treats are released.
+Each fit starts from the previous one, so what it has learned carries forward.
+It starts out assuming the cat is not conditioned at all, so early on it treats
+often. As the cat learns to stay, the model waits longer before treating.
+
+Fitted parameters are saved under `data/cats/<cat-id>/`:
+
+- `params.json` — latest fitted coefficients (rewritten after every fit)
+- `diagnostics.csv` — one row per decision: coefficients, state, P(treat/no treat),
+  current treat wait, lure count, and the decision
+
+```bash
+# First run: a new id like cat-20261108-153012-a1b2 is generated and printed
+python -m staystation.main --model 4 --camera usb
+# Later runs: resume that cat's learned params
+python -m staystation.main --model 4 --camera usb --cat-id cat-20261108-153012-a1b2
+```
+
+If you pass a `--cat-id` that has no saved params yet (e.g. `--cat-id mochi`),
+it starts from the defaults and saves under that name.
 
 ### Optional: start the app on boot with systemd
 

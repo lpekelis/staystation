@@ -12,6 +12,7 @@ import pandas as pd
 
 matplotlib.use("Agg")  # Non-interactive backend for headless environments
 
+from staystation.bandit_model import ConditioningModel4
 from staystation.model import (
     ConditioningModel,
     ConditioningModel1,
@@ -163,6 +164,7 @@ _MODEL_CLASSES: dict[int, type[ConditioningModel]] = {
     1: ConditioningModel1,
     2: ConditioningModel2,
     3: ConditioningModel3,
+    4: ConditioningModel4,
 }
 
 
@@ -170,6 +172,8 @@ def _make_model(version: int, horizon: int, gamma: float) -> ConditioningModel:
     cls = _MODEL_CLASSES[version]
     if version == 3:
         return ConditioningModel3(horizon=horizon)
+    if version == 4:
+        return ConditioningModel4()
     return cls(sigma=30.0, gamma=gamma, horizon=horizon)  # type: ignore[call-arg]
 
 
@@ -180,7 +184,11 @@ def main() -> None:
         description="Simulate and visualize conditioning model behavior."
     )
     parser.add_argument(
-        "--model", type=int, choices=[1, 2, 3], default=2, help="Model version to use (default: 2)"
+        "--model",
+        type=int,
+        choices=[1, 2, 3, 4],
+        default=2,
+        help="Model version to use (default: 2)",
     )
     args = parser.parse_args()
 
